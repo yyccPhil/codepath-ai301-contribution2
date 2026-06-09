@@ -1,8 +1,8 @@
 # Contribution #2411: Back to top button is cropped on mobile
 
-**Contribution Number:** 1 
-**Student:** Yuan Yuan
-**Issue:** https://github.com/pydata/pydata-sphinx-theme/issues/2411 
+**Contribution Number:** 1  
+**Student:** Yuan Yuan  
+**Issue:** https://github.com/pydata/pydata-sphinx-theme/issues/2411  
 **Status:** Phase I Complete
 
 ---
