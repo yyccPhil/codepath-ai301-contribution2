@@ -1,15 +1,15 @@
-# Contribution [#]: [Issue Title]
+# Contribution [#2411]: [Back to top button is cropped on mobile]
 
-**Contribution Number:** [1 / 2 / 3]  
-**Student:** [Your Name]  
-**Issue:** [GitHub issue link]  
-**Status:** [Phase I / Phase II / Phase III / Phase IV] [In Progress / Complete]
+**Contribution Number:** [1]  
+**Student:** [Yuan Yuan]  
+**Issue:** [https://github.com/pydata/pydata-sphinx-theme/issues/2411]  
+**Status:** [Phase I] [In Progress]
 
 ---
 
 ## Why I Chose This Issue
 
-[1-2 paragraphs explaining why this issue interests you, how it matches your skills/learning goals, what you hope to learn]
+[I chose this issue — a cropped "back to top" button on mobile in pydata-sphinx-theme — because it's small, clearly defined, and has an obvious "done" state, which makes it a realistic first open-source contribution rather than something that could balloon in scope. My background is mostly in Python, so this front-end bug stretches me in a useful direction: I'll need to dig into the theme's CSS and mobile breakpoints, which complements my existing skills instead of repeating them. Just as importantly, I want to learn the full contribution workflow end-to-end — setting up the project locally, reproducing a bug, opening a focused PR with before/after screenshots, and responding to maintainer feedback — in a mature, newcomer-friendly project. My real goal this cycle isn't just closing one issue, but getting comfortable enough with the process that a bigger one feels routine next time.]
 
 ---
 
