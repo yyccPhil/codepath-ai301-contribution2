@@ -1,94 +1,120 @@
-# Contribution #2411: Back to top button is cropped on mobile
+# Contribution #3446: MathTable — First and Last Column Are Truncated
 
 **Contribution Number:** 2  
 **Student:** Yuan Yuan  
-**Issue:** https://github.com/pydata/pydata-sphinx-theme/issues/2411  
-**Status:** Phase II Complete
+**Issue:** https://github.com/ManimCommunity/manim/issues/3446  
+**Status:** Phase I — Complete
 
 ---
 
 ## Why I Chose This Issue
 
-I chose this issue — a cropped "back to top" button on mobile in pydata-sphinx-theme — because it's small, clearly defined, and has an obvious "done" state, which makes it a realistic first open-source contribution rather than something that could balloon in scope. My background is mostly in Python, so this front-end bug stretches me in a useful direction: I'll need to dig into the theme's CSS and mobile breakpoints, which complements my existing skills instead of repeating them. Just as importantly, I want to learn the full contribution workflow end-to-end — setting up the project locally, reproducing a bug, opening a focused PR with before/after screenshots, and responding to maintainer feedback — in a mature, newcomer-friendly project. My real goal this cycle isn't just closing one issue, but getting comfortable enough with the process that a bigger one feels routine next time.
+I chose issue #3446, "0.17.3 MathTable - first and last column of MathTable are truncated" in ManimCommunity/manim, because it is a well-scoped, reproducible layout bug that matches my Python skills and my goal of learning how to locate and fix a real bug inside an unfamiliar codebase. The issue is labeled `good first issue`, is unassigned, and ships with minimal reproduction code plus before/after screenshots, so what "fixed" looks like is unambiguous — which makes it a realistic first contribution rather than an open-ended project.
+
+I'm interested in this because:
+1. **It's pure Python.** The bug lives in how the `Table` / `MathTable` class computes column widths and buffers, so I can work on it without touching the rendering internals or LaTeX itself.
+2. **The scope is contained and testable.** I can run the provided snippet, watch the first and last columns get clipped, fix the width/buffer logic, and confirm the result visually — a clear, bounded piece of work.
+3. **There is concrete context to start from** (reproduction code, a stated expected behavior, and comparison images), which should make Phase II faster.
+4. **I want to learn** how a mature open-source project structures its layout logic, and how to trace a visual bug back to the arithmetic that causes it.
+
+*Community engagement:* _[To fill in after Step 8 — e.g., "Left a comment on the issue on <date> introducing myself and confirming intent to work on it; asked whether it still reproduces on the latest release."]_
 
 ---
 
 ## Understanding the Issue
 
 ### Problem Description
-On mobile browsers, the floating "Back to top" button is cut off at the bottom edge of the screen. On Firefox for Android with three-button navigation, part of the button is hidden behind the system navigation bar, and it also flickers (rapidly toggles between shown and hidden) while scrolling. The problem does not appear with gesture-based navigation, and does not appear on desktop.
+
+When a `MathTable` is given fixed column widths (via `arrange_in_grid_config={"col_widths": [...]}`), the widths are not correctly applied to the **first and last columns**. Those two outer columns get truncated at the left and right edges of the table instead of honoring the requested width. Inner columns render as expected.
 
 ### Expected Behavior
-The button should sit fully within the visible viewport, a fixed distance above the bottom edge, and stay stable (no flickering) while the user scrolls — regardless of the browser's dynamic UI such as the address bar or the system navigation bar.
+
+Every column, including the first and last, should render at the width specified in `col_widths`, independent of the cell contents.
 
 ### Current Behavior
-The button is anchored using `top: 90vh`, which places it at 90% of the *largest* viewport height. On mobile, where the system navigation bar reduces the actually-visible height, this pushes the button partly below the visible area, so it appears cropped. Separately, the scroll handler decides visibility with a two-way (show / hide) comparison, which causes flickering on Firefox/Android.
+
+The first and last columns are clipped at the table's outer edges, so their contents/width do not match the specified value (see the reproduction screenshots in the issue thread).
 
 ### Affected Components
-- `src/pydata_sphinx_theme/assets/styles/base/_base.scss` — the `#pst-back-to-top` rule (controls positioning; cause of the cropping).
-- `src/pydata_sphinx_theme/assets/scripts/bootstrap.js` — the scroll-based show/hide handler (cause of the flickering).
+
+*(Tentative — to be confirmed during Phase II reproduction.)*
+Likely the `Table` / `MathTable` implementation in manim's mobject layer (probably `manim/mobject/table.py`), specifically the logic that applies `col_widths`, `h_buff`, and `include_outer_lines` when arranging cells. The exact file and function will be pinned down once I reproduce the bug and trace the layout code.
 
 ---
 
 ## Reproduction Process
 
+_⏳ Phase II — not started yet._
+
 ### Environment Setup
-I reused the GitHub Codespaces dev container from my first contribution, which surfaced two real setup issues worth documenting:
 
-- **Python version mismatch.** The container had been built from an older config pinned to Python 3.10, but the project now requires `sphinx>=8.2`, which needs Python >=3.11. Running `tox -e docs-live` failed with `ERROR: No matching distribution found for sphinx<10,>=8.2`. I confirmed the cause with `python --version` (3.10.18) and by checking `.devcontainer/devcontainer.json`, which pins the `mcr.microsoft.com/devcontainers/python:1-3.11-bullseye` image. I fixed it by rebuilding the container (Command Palette → "Codespaces: Rebuild Container"); afterward `python --version` reported 3.11 and the docs built successfully.
-- **Wrong build tool assumption.** I first tried `nox -s docs-live`, which failed with `FileNotFoundError: noxfile.py`. The project uses **tox**, not nox; the correct command is `tox -e docs-live` (the live-reload docs environment listed by `tox list`).
-
-Working branch: https://github.com/yyccPhil/pydata-sphinx-theme/tree/fix-issue-2411
+[Notes on setting up your local development environment — challenges faced, how you solved them. manim uses Poetry and requires LaTeX + ffmpeg; fill in once set up.]
 
 ### Steps to Reproduce
-1. Build and serve the docs locally with `tox -e docs-live`, then open the served site in a browser.
-2. Open the browser DevTools and toggle the device toolbar (mobile emulation); select a narrow mobile viewport (e.g. Pixel 7).
-3. Open any long documentation page and scroll down until the circular "Back to top" arrow button appears in the lower-center of the screen.
-4. **Expected:** the button is fully visible, sitting a fixed distance above the bottom edge.
-5. **Actual:** the button, anchored at `top: 90vh`, is pushed toward/below the bottom of the visible viewport and appears cropped. Inspecting `#pst-back-to-top` in DevTools and filtering the Styles pane for `bottom` shows "No matching selector or style," confirming the button is positioned only from the top and never anchored to the bottom.
+
+1. [Step 1 — e.g., install manim (current version) in a fresh environment]
+2. [Step 2 — run the minimal scene from the issue]
+3. [Observed result — first/last columns truncated]
+
+Reference reproduction code from the issue:
+
+```python
+class Test(Scene):
+    def construct(self):
+        mytable = MathTable(
+            [[1, 10, 100, 1000, 10000, 100000], [0, 0, 0, 0, 0, 0]],
+            h_buff=.1,
+            v_buff=.1,
+            include_outer_lines=True,
+            arrange_in_grid_config={"col_widths": [3] * 6, "col_alignments": ["c"] * 6},
+        ).scale_to_fit_width(10)
+        self.add(mytable)
+```
 
 ### Reproduction Evidence
-- **Branch in fork:** https://github.com/yyccPhil/pydata-sphinx-theme/tree/fix-issue-2411
-- **Screenshots:** ![Back to top button cropped on mobile](docs/back-to-top-cropped.jpg)
-- **My findings:** The cropping is caused by `top: 90vh` in the `#pst-back-to-top` rule (`_base.scss`), which uses dynamic viewport height that includes browser/system UI. Using `git blame` I traced this line to commit `5fc14526` (PR #1616, "fix: allow user to control the back-to-top button presence," 2024-01-18). Running `git tag --contains 5fc14526` shows the line first shipped in **v0.15.2**, not 0.15.4 as stated in the issue — 0.15.4 is simply the release where the reporter happened to notice it. The flickering is separate and lives in the scroll handler in `bootstrap.js`, which toggles visibility with a two-state comparison.
+
+- **Commit showing reproduction:** [Link to commit in your fork]
+- **Screenshots/logs:** [If applicable]
+- **My findings:** [Confirm whether it still reproduces on the current version, and on which version]
 
 ---
 
 ## Solution Approach
 
-### Analysis
-There are two independent root causes:
+_⏳ Phase II — not started yet._
 
-1. **Cropping (CSS).** `#pst-back-to-top` is positioned with `position: fixed; top: 90vh;`. The `vh` unit resolves against the *largest* viewport height, which on mobile includes the space taken by the browser address bar and the Android three-button system navigation bar. The actually-visible area is shorter than `100vh`, so `top: 90vh` places the button lower than intended and it gets clipped by the system UI. Gesture navigation has a much thinner system bar, which is why the reporter doesn't see it there.
-2. **Flickering (JS).** The scroll handler in `bootstrap.js` shows the button only when the page is scrolling up and hides it otherwise. On Firefox/Android, slow scrolling fires multiple scroll events with the *same* Y coordinate; those "no-movement" events are treated as "not scrolling up," so the button is hidden between every show — producing the flicker.
+### Analysis
+
+[Root-cause analysis — what in the width/buffer calculation causes the outer columns to be clipped?]
 
 ### Proposed Solution
-- **Cropping:** anchor the button from the bottom of the viewport with a fixed offset (`bottom: <fixed rem>`) instead of `top: 90vh`, removing the dependency on dynamic viewport height. Keep horizontal centering.
-- **Flickering:** change the scroll handler from a two-way decision to a three-way one (up → show, down → hide, unchanged → do nothing) so repeated same-Y events no longer toggle visibility.
 
-This direction is consistent with the maintainer's own draft PR (#2442), which fixes the cropping with a bottom anchor and attempts the same flicker fix.
+[High-level description of the fix approach]
 
 ### Implementation Plan
-Using the UMPIRE framework (adapted):
 
-**Understand:** The floating back-to-top button is cropped on mobile and flickers on Firefox/Android. The cropping comes from anchoring the button with `top: 90vh` (dynamic viewport height that counts system UI); the flicker comes from a two-state scroll handler that hides the button on any non-upward scroll event.
+Using UMPIRE framework (adapted):
 
-**Match:** The maintainer's draft PR (#2442) confirms the approach: anchor from the bottom instead of the top, and make the scroll handler distinguish "no movement" from "scrolling down." Other fixed/floating elements in the theme use fixed offsets rather than `vh`, which is the pattern to follow.
+**Understand:** Fixed `col_widths` are not honored for the first and last columns of a `MathTable`; they are truncated at the table edges.
+
+**Match:** [What similar patterns/solutions exist in the codebase? e.g., how row heights or inner columns are handled correctly.]
 
 **Plan:**
-1. In `src/pydata_sphinx_theme/assets/styles/base/_base.scss`, replace `top: 90vh;` on `#pst-back-to-top` with a bottom anchor (e.g. `bottom: <fixed rem offset>;`), keeping the horizontal centering. This removes the dependency on dynamic viewport height and fixes the cropping.
-2. In `src/pydata_sphinx_theme/assets/scripts/bootstrap.js`, change the scroll handler from a two-way (up → show, otherwise hide) decision to a three-way one (up → show, down → hide, unchanged → no-op) to fix the flicker.
-3. Verify the button still behaves correctly when `back_to_top_button` is disabled in config, to avoid regressing #1950 / #2267.
+1. [Modify file X to do Y]
+2. [Add / adjust function Z]
+3. [Update tests]
 
-**Implement:** *(Phase III — placeholder.)* Changes will be committed to the working branch: https://github.com/yyccPhil/pydata-sphinx-theme/tree/fix-issue-2411
+**Implement:** [Link to your branch/commits as you work]
 
-**Review:** Self-review against `CONTRIBUTING.md` and the project's commit-message conventions (natural-English imperative style, matching recent merged PRs). Keep the diff minimal and focused on the two root causes.
+**Review:** [Self-review checklist — does it follow CONTRIBUTING.md / the project's style?]
 
-**Evaluate:** Re-run the reproduction steps in mobile emulation and confirm the button is fully visible and stable while scrolling. Check light and dark themes, gesture and button navigation, and that existing behavior (button appears only after scrolling, click returns to top) still works. Run the theme's test suite (`tox -e py311-tests`) to confirm no regressions.
+**Evaluate:** [How will you verify it works — rerun the repro scene and compare output?]
 
 ---
 
 ## Testing Strategy
+
+_⏳ Phase III — not started yet._
 
 ### Unit Tests
 
@@ -109,6 +135,8 @@ Using the UMPIRE framework (adapted):
 
 ## Implementation Notes
 
+_⏳ Phase II–III — not started yet._
+
 ### Week [X] Progress
 
 [What you built this week, challenges faced, decisions made]
@@ -127,9 +155,11 @@ Using the UMPIRE framework (adapted):
 
 ## Pull Request
 
+_⏳ Phase IV — not started yet._
+
 **PR Link:** [GitHub PR URL when submitted]
 
-**PR Description:** [Draft or final PR description - much of the content above can be adapted]
+**PR Description:** [Draft or final PR description — much of the content above can be adapted]
 
 **Maintainer Feedback:**
 - [Date]: [Summary of feedback received]
@@ -140,6 +170,8 @@ Using the UMPIRE framework (adapted):
 ---
 
 ## Learnings & Reflections
+
+_⏳ To be completed as the contribution progresses._
 
 ### Technical Skills Gained
 
@@ -157,9 +189,7 @@ Using the UMPIRE framework (adapted):
 
 ## Resources Used
 
-- [pydata-sphinx-theme contributor guide](https://pydata-sphinx-theme.readthedocs.io/en/stable/community/)
-- [Original issue: pydata-sphinx-theme#2411](https://github.com/pydata/pydata-sphinx-theme/issues/2411)
-- [Maintainer's draft fix: PR #2442](https://github.com/pydata/pydata-sphinx-theme/pull/2442)
-- [Commit that introduced the bug: PR #1616](https://github.com/pydata/pydata-sphinx-theme/pull/1616)
-- [MDN — viewport units (`vh`) and mobile browser behavior](https://developer.mozilla.org/en-US/docs/Web/CSS/length#viewport-percentage_lengths)
-- [Bootstrap z-index layering reference](https://getbootstrap.com/docs/5.2/layout/z-index/)
+- manim community docs: https://docs.manim.community/
+- manim CONTRIBUTING guide: https://docs.manim.community/en/stable/contributing.html
+- The issue thread: https://github.com/ManimCommunity/manim/issues/3446
+- [Add tutorials, Stack Overflow posts, or related issues/discussions as you use them]
