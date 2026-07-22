@@ -1,4 +1,4 @@
-# Contribution #3446: MathTable — First and Last Column Are Truncated
+# Contribution #2: MathTable — First and Last Column Are Truncated
 
 **Contribution Number:** 2  
 **Student:** Yuan Yuan  
@@ -37,24 +37,41 @@ The first and last columns are clipped at the table's outer edges, so their cont
 
 ### Affected Components
 
-*(Tentative — to be confirmed during Phase II reproduction.)*
-Likely the `Table` / `MathTable` implementation in manim's mobject layer (probably `manim/mobject/table.py`), specifically the logic that applies `col_widths`, `h_buff`, and `include_outer_lines` when arranging cells. The exact file and function will be pinned down once I reproduce the bug and trace the layout code.
+Confirmed during reproduction (manim v0.20.1): the base `Table` class in `manim/mobject/table.py` (inherited by `MathTable`). Specifically:
+- `Table._add_vertical_lines()` — the outer vertical lines are anchored to the **content** bounding box of the outer columns, not the column slots:
+  - left line: `self.get_columns()[0].get_left()[0] - 0.5 * self.h_buff` (~line 370)
+  - right line: `self.get_columns()[-1].get_right()[0] + 0.5 * self.h_buff` (~line 376)
+- `Table.get_cell()` — cell corners use the same content-based anchors: `col.get_left()[0] - self.h_buff / 2` and `col.get_right()[0] + self.h_buff / 2` (~lines 791–806).
+
+The column widths themselves are applied earlier via `arrange_in_grid(..., **self.arrange_in_grid_config)` (~line 295), so the cells *are* placed in correctly-sized slots — but the line/cell boundaries are drawn from content extents rather than those slots.
 
 ---
 
 ## Reproduction Process
 
-_⏳ Phase II — not started yet._
+Reproduced successfully on **manim v0.20.1** (current release; the issue was originally filed against v0.17.3). The buggy code path in `Table._add_vertical_lines()` is unchanged in the latest source, so the bug is still present.
 
 ### Environment Setup
 
-[Notes on setting up your local development environment — challenges faced, how you solved them. manim uses Poetry and requires LaTeX + ffmpeg; fill in once set up.]
+Setup on macOS. The issues I hit and how I solved them:
+
+- **System dependencies:** installed via Homebrew — `brew install py3cairo pango pkg-config scipy ffmpeg` (needed for `pycairo`/`manimpango` and rendering).
+- **LaTeX:** MacTeX (`mactex`) is ~6.9 GB; a lighter alternative is BasicTeX. LaTeX is only required to render `MathTable`; I confirmed the bug with a LaTeX-free `Table` variant (`repro_text.py`) that exercises the same layout code.
+- **`ERROR: editable mode requires a setuptools-based build`:** caused by an old pip (21.x) that can't do editable installs of pyproject-only projects → fixed by upgrading pip.
+- **`Package 'manim' requires a different Python: 3.9.6 not in '>=3.11'`:** the system Python was too old → installed Python 3.12 via `brew install python@3.12`.
+- **`error: externally-managed-environment`:** Homebrew blocks installing into its Python system-wide → fixed by creating a virtual environment: `python3.12 -m venv .venv && source .venv/bin/activate`, then `pip install -e .` inside it.
+- Result: `import manim` reports **0.20.1** — matching the version I traced the root cause in.
 
 ### Steps to Reproduce
 
-1. [Step 1 — e.g., install manim (current version) in a fresh environment]
-2. [Step 2 — run the minimal scene from the issue]
-3. [Observed result — first/last columns truncated]
+1. In a fresh environment with manim installed, create a file `repro.py` with the scene below (the exact snippet from the issue).
+2. Render a still image: `manim -s -ql repro.py Test` (the `-s` flag saves the last frame as a PNG; no ffmpeg needed).
+3. Open the generated PNG under `media/images/repro/`.
+4. **Observed result:** the first and last columns are visibly narrower than the four inner columns — the outer columns are truncated at the table's left/right edges and do not honor `col_widths=[3]*6`.
+
+**Quantified measurement** (from reading the vertical-line x-positions on v0.20.1, table scaled to width 10): inner columns ≈ 1.85 wide and equal, but the **first column is only ~1.00 (≈54% of an inner column)** and the **last column ~1.60 (≈87%)**. The asymmetry matches the root cause: the more narrow a column's *content*, the more that outer column is truncated (the first column holds the narrow `"1"`/`"0"`; the last holds the wide `"100000"`).
+
+> **LaTeX-free variant:** if you don't have LaTeX installed, replace `MathTable` with `Table` and pass the numbers as strings (e.g. `Table([["1","10",...],["0",...]], ...)`). This exercises the *same* `Table` layout code and reproduces the identical truncation, since `MathTable` only overrides how cell contents are built, not the line/cell geometry.
 
 Reference reproduction code from the issue:
 
@@ -73,42 +90,53 @@ class Test(Scene):
 
 ### Reproduction Evidence
 
-- **Commit showing reproduction:** [Link to commit in your fork]
-- **Screenshots/logs:** [If applicable]
-- **My findings:** [Confirm whether it still reproduces on the current version, and on which version]
+- **Branch in my fork:** https://github.com/yyccPhil/manim/tree/yyccphil-fix-issue-3446 (contains `repro.py`, `repro_text.py`, and `repro_table.png`)
+- **Commit showing reproduction:** commit `c3adf52e` on the branch above
+- **Screenshots/logs:** `repro_table.png` (rendered on v0.20.1) — first and last columns clearly truncated; committed to the branch above.
+- **My findings:**
+  - The bug still reproduces on the current release (v0.20.1), not just the reported v0.17.3.
+  - Root cause traced to `Table._add_vertical_lines()` and `Table.get_cell()` in `manim/mobject/table.py`: line/cell boundaries are anchored to each column's **content** extent (`get_columns()[i].get_left()/get_right()`) plus half of `h_buff`, instead of to the arranged **column slots** defined by `col_widths`.
+  - Because it depends on content width, the truncation is asymmetric: narrow-content outer columns shrink more than wide-content ones.
+  - `git log` on `table.py` shows no commit addressing column-width truncation, consistent with the bug still being open.
 
 ---
 
 ## Solution Approach
 
-_⏳ Phase II — not started yet._
-
 ### Analysis
 
-[Root-cause analysis — what in the width/buffer calculation causes the outer columns to be clipped?]
+When `col_widths` is supplied, `arrange_in_grid` places each cell centered inside a fixed-width slot, so cells whose content is narrower than their slot no longer touch the slot edges. However, the table's grid lines and cell boundaries are computed from the **content** bounding boxes of the columns, not from those slots:
+
+- `_add_vertical_lines()` draws the outer lines at `get_columns()[0].get_left() - 0.5*h_buff` and `get_columns()[-1].get_right() + 0.5*h_buff`.
+- `get_cell()` builds cell corners the same way, from `col.get_left()/get_right()` ± `h_buff/2`.
+
+For inner columns this looks roughly correct (inner lines sit between adjacent columns' content), but for the first and last columns the outer line ends up only half a buffer outside the *content* instead of half a slot outside the column — so the outer columns render narrower than `col_widths` requests. The effect scales with how narrow the content is, which explains the asymmetry measured during reproduction.
 
 ### Proposed Solution
 
-[High-level description of the fix approach]
+_(Direction to validate and implement in Phase III — not final.)_
+
+Anchor the outer vertical lines (and, for consistency, `get_cell`'s outer edges) to the **column slot boundaries** rather than the content extent. Concretely, the boundary between two columns should sit midway between their slot centers, and the outer boundaries should extend half a slot-width (not half an `h_buff`) beyond the first/last column centers. The slot geometry is already known at arrange time (from `col_widths` + `h_buff`), so the fix is to derive line/cell x-positions from that arranged column pitch instead of from `get_columns()[i].get_left()/get_right()`. The default case (no `col_widths`, content fills the slot) must remain visually unchanged.
 
 ### Implementation Plan
 
 Using UMPIRE framework (adapted):
 
-**Understand:** Fixed `col_widths` are not honored for the first and last columns of a `MathTable`; they are truncated at the table edges.
+**Understand:** Fixed `col_widths` are not honored for the first and last columns of a `Table`/`MathTable`; the outer columns are truncated because grid/cell boundaries are drawn from column *content* extents rather than the column *slots*.
 
-**Match:** [What similar patterns/solutions exist in the codebase? e.g., how row heights or inner columns are handled correctly.]
+**Match:** Compare how inner vs. outer lines are anchored in `_add_vertical_lines()`; check how row heights / `v_buff` are handled for the analogous vertical case; look for any existing helper that exposes per-column slot positions from the `arrange_in_grid` result.
 
 **Plan:**
-1. [Modify file X to do Y]
-2. [Add / adjust function Z]
-3. [Update tests]
+1. In `manim/mobject/table.py`, change the outer-line anchors in `_add_vertical_lines()` so the first/last boundaries reflect the column slot width, not `get_columns()[0/-1].get_left()/get_right() ± 0.5*h_buff`.
+2. Apply the same correction to `get_cell()` so a cell's polygon matches its rendered column.
+3. Verify the default path (no `col_widths`) is unchanged.
+4. Add/extend tests (see Testing Strategy) and update docstrings/examples if needed.
 
-**Implement:** [Link to your branch/commits as you work]
+**Implement:** [Link to your feature branch/commits during Phase III.]
 
-**Review:** [Self-review checklist — does it follow CONTRIBUTING.md / the project's style?]
+**Review:** Follow `CONTRIBUTING.md` — run the project's linters/formatters and the existing `tests/` for tables; confirm no visual regression in existing table examples.
 
-**Evaluate:** [How will you verify it works — rerun the repro scene and compare output?]
+**Evaluate:** Re-render the reproduction scene and re-measure the vertical-line x-positions; all six columns should be equal width (≈1.67 at width 10) with `col_widths=[3]*6`, and unchanged output when `col_widths` is not set.
 
 ---
 
